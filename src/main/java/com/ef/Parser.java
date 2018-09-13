@@ -2,12 +2,16 @@ package com.ef;
 
 import org.apache.commons.cli.*;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.temporal.TemporalAccessor;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Parser {
 
@@ -70,6 +74,19 @@ public class Parser {
             System.exit(-1);
         }
 
+        TemporalAccessor startDateFormatted = DateTimeFormatter.ofPattern("yyyy-MM-dd.HH:mm:ss").parse(startDateParam);
+        LocalDateTime startLocalDateTime = LocalDateTime.from(startDateFormatted);
+        LocalDateTime endLocalDateTime = null;
+
+        switch (durationParam) {
+            case "hourly":
+                endLocalDateTime = startLocalDateTime.plusHours(1);
+                break;
+            case "daily":
+                endLocalDateTime = startLocalDateTime.plusDays(1);
+                break;
+        }
+
         String thresholdParam = cmd.getOptionValue("threshold");
 
         try {
@@ -82,15 +99,41 @@ public class Parser {
         InputStream is = Parser.class.getClassLoader().getResourceAsStream("access.log");
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
 
-        List<String> lines = new ArrayList<>();
+        Map<String, Integer> requests = new HashMap<>();
 
         while(reader.ready()) {
+
             String line = reader.readLine();
-            String split[] = line.split("|");
+
+            String split[] = line.split("\\|");
+
+            String date = split[0].replace(" ", ".");
+            int x = date.lastIndexOf(".");
+            String substringDate = date.substring(0, x);
+            String ipAddress = split[1];
+
+            TemporalAccessor dateFromFile = DateTimeFormatter.ofPattern("yyyy-MM-dd.HH:mm:ss").parse(substringDate);
+            LocalDateTime localDateTimeFromFile = LocalDateTime.from(dateFromFile);
 
 
+            if(localDateTimeFromFile.isEqual(startLocalDateTime) || localDateTimeFromFile.isAfter(startLocalDateTime)) {
+                if(localDateTimeFromFile.isEqual(endLocalDateTime) || localDateTimeFromFile.isBefore(endLocalDateTime)) {
+                    int count = requests.getOrDefault(ipAddress, 0);
+                    requests.put(ipAddress, ++count);
 
+                }
+
+            }
         }
+
+        requests.forEach((k, v) -> {
+            if(v.intValue() > Integer.parseInt(thresholdParam)) {
+                System.out.println("IP: " + k + " made " + v.toString() + " requests.");
+            }
+        });
+
+        reader.close();
+        is.close();
 
     }
 
