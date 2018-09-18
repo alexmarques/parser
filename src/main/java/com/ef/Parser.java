@@ -10,10 +10,15 @@ import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Parser {
+
+    public static final BlockedIpsRepository repository = new BlockedIpsRepository();
+    public static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd.HH:mm:ss");
 
     public static void main(String[] args) throws ParseException, IOException {
 
@@ -76,7 +81,7 @@ public class Parser {
 
         TemporalAccessor startDateFormatted = DateTimeFormatter.ofPattern("yyyy-MM-dd.HH:mm:ss").parse(startDateParam);
         LocalDateTime startLocalDateTime = LocalDateTime.from(startDateFormatted);
-        LocalDateTime endLocalDateTime = null;
+        LocalDateTime endLocalDateTime = startLocalDateTime.plusHours(1);
 
         switch (durationParam) {
             case "hourly":
@@ -87,7 +92,7 @@ public class Parser {
                 break;
         }
 
-        String thresholdParam = cmd.getOptionValue("threshold");
+        String thresholdParam = cmd.getOptionValue("");
 
         try {
             Integer.parseInt(thresholdParam);
@@ -99,35 +104,28 @@ public class Parser {
         InputStream is = Parser.class.getClassLoader().getResourceAsStream("access.log");
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
 
-        Map<String, Integer> requests = new HashMap<>();
+        Map<String, List<BlockedIpDTO>> requests = new HashMap<>();
 
         while(reader.ready()) {
 
             String line = reader.readLine();
 
-            String split[] = line.split("\\|");
+            BlockedIpDTO blockedIpDTO = parseLine(line);
 
-            String date = split[0].replace(" ", ".");
-            int x = date.lastIndexOf(".");
-            String substringDate = date.substring(0, x);
-            String ipAddress = split[1];
-
-            TemporalAccessor dateFromFile = DateTimeFormatter.ofPattern("yyyy-MM-dd.HH:mm:ss").parse(substringDate);
-            LocalDateTime localDateTimeFromFile = LocalDateTime.from(dateFromFile);
-
-
-            if(localDateTimeFromFile.isEqual(startLocalDateTime) || localDateTimeFromFile.isAfter(startLocalDateTime)) {
-                if(localDateTimeFromFile.isEqual(endLocalDateTime) || localDateTimeFromFile.isBefore(endLocalDateTime)) {
-                    int count = requests.getOrDefault(ipAddress, 0);
-                    requests.put(ipAddress, ++count);
-
+            if(blockedIpDTO.getRequestTime().isEqual(startLocalDateTime) || blockedIpDTO.getRequestTime().isAfter(startLocalDateTime)) {
+                if(blockedIpDTO.getRequestTime().isEqual(endLocalDateTime) || blockedIpDTO.getRequestTime().isBefore(endLocalDateTime)) {
+                    List<BlockedIpDTO> blockedIpList = requests.getOrDefault(blockedIpDTO.getIp(), new ArrayList<>());
+                    blockedIpList.add(blockedIpDTO);
+                    requests.put(blockedIpDTO.getIp(), blockedIpList);
                 }
-
             }
         }
 
+        LocalDateTime finalEndLocalDateTime = endLocalDateTime;
         requests.forEach((k, v) -> {
-            if(v.intValue() > Integer.parseInt(thresholdParam)) {
+            if(v.size() > Integer.parseInt(thresholdParam)) {
+                String reason = String.format("IP: %s has %s or more requests between %s and %s", k, thresholdParam, startLocalDateTime.toString(), finalEndLocalDateTime.toString());
+
                 System.out.println("IP: " + k + " made " + v.toString() + " requests.");
             }
         });
@@ -137,16 +135,23 @@ public class Parser {
 
     }
 
-    /*
-    2017-01-01 00:00:11.763|192.168.234.82|"GET / HTTP/1.1"|200|"swcd (unknown version) CFNetwork/808.2.16 Darwin/15.6.0"
-    2017-01-01 00:00:21.164|192.168.234.82|"GET / HTTP/1.1"|200|"swcd (unknown version) CFNetwork/808.2.16 Darwin/15.6.0"
-    2017-01-01 00:00:23.003|192.168.169.194|"GET / HTTP/1.1"|200|"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393"
-    2017-01-01 00:00:40.554|192.168.234.82|"GET / HTTP/1.1"|200|"swcd (unknown version) CFNetwork/808.2.16 Darwin/15.6.0"
-    2017-01-01 00:00:54.583|192.168.169.194|"GET / HTTP/1.1"|200|"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393"
-    2017-01-01 00:00:54.639|192.168.234.82|"GET / HTTP/1.1"|200|"swcd (unknown version) CFNetwork/808.2.16 Darwin/15.6.0"
-    2017-01-01 00:00:59.410|192.168.169.194|"GET / HTTP/1.1"|200|"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.79 Safari/537.36 Edge/14.14393"
-    2017-01-01 00:01:02.113|192.168.247.138|"GET / HTTP/1.1"|200|"Mozilla/5.0 (Windows NT 10.0; WOW64; rv:55.0) Gecko/20100101 Firefox/55.0"
-    2017-01-01 00:01:04.033|192.168.54.139|"GET / HTTP/1.1"|200|"Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.78 Safari/537.36"
-    2017-01-01 00:01:04.678|192.168.162.248|"GET / HTTP/1.1"|200|"swcd (unknown version) CFNetwork/808.2.16 Darwin/15.6.0"
-     */
+    private static BlockedIpDTO parseLine(String line) {
+        String split[] = line.split("\\|");
+
+        BlockedIpDTO dto = new BlockedIpDTO();
+        dto.setRequestTime(parseRequestedTime(split[0]));
+        dto.setIp(split[1]);
+
+        return dto;
+    }
+
+    private static LocalDateTime parseRequestedTime(String requestedTime) {
+        String date = requestedTime.replace(" ", ".");
+        String substringDate = date.substring(0, date.lastIndexOf("."));
+        return LocalDateTime.from(formatter.parse(substringDate));
+    }
+
+    private static String parseHttpMethod(String httpMethod) {
+        return null;
+    }
 }
