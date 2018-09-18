@@ -92,7 +92,7 @@ public class Parser {
                 break;
         }
 
-        String thresholdParam = cmd.getOptionValue("");
+        String thresholdParam = cmd.getOptionValue("threshold");
 
         try {
             Integer.parseInt(thresholdParam);
@@ -124,15 +124,16 @@ public class Parser {
         LocalDateTime finalEndLocalDateTime = endLocalDateTime;
         requests.forEach((k, v) -> {
             if(v.size() > Integer.parseInt(thresholdParam)) {
+                v.forEach(blockedIpDTO -> repository.save(blockedIpDTO));
                 String reason = String.format("IP: %s has %s or more requests between %s and %s", k, thresholdParam, startLocalDateTime.toString(), finalEndLocalDateTime.toString());
-
-                System.out.println("IP: " + k + " made " + v.toString() + " requests.");
+                //System.out.println("IP: " + k + " made " + v.toString() + " requests.");
+                System.out.println(reason);
             }
         });
 
         reader.close();
         is.close();
-
+        Database.releaseConnection();
     }
 
     private static BlockedIpDTO parseLine(String line) {

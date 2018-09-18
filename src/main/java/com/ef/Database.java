@@ -3,6 +3,7 @@ package com.ef;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 public class Database {
 
@@ -13,7 +14,7 @@ public class Database {
     public static Connection getConnection() {
         if(conn == null) {
             try {
-                DriverManager.getConnection("url", "user", "password");
+                DriverManager.getConnection("jdbc:mysql://localhost:3306/parser", "root", "");
             } catch (SQLException e) {
                 System.err.println(e.getMessage());
             }
@@ -28,6 +29,16 @@ public class Database {
                 conn = null;
             } catch (SQLException e) {
                 System.err.println("Unable to close database connection. " + e.getMessage());
+            }
+        }
+    }
+
+    public static void closeQuietly(Statement statement) {
+        if(statement != null) {
+            try {
+                statement.close();
+            } catch (SQLException e) {
+
             }
         }
     }

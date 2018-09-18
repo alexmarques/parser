@@ -4,19 +4,18 @@ import java.sql.*;
 
 public class BlockedIpsRepository {
 
-    private static final String INSERT_STMT = "INSERT INTO record(request_time, ip, reason, start_date_param, duration, threshold) values(?,?,?,?,?,?)";
+    private static final String INSERT_STMT = "INSERT INTO BLOCKED_IPS(request_time, ip, reason, start_date_param, duration, threshold) values(?,?,?,?,?,?)";
 
     /**
-     * Save the record into the database and return the primary key
+     * Save the blocked ip into the database
      * @param blockedIpDTO
      * @return
      */
-    public int save(BlockedIpDTO blockedIpDTO) {
-
-        try (
-                Connection conn = Database.getConnection();
-                PreparedStatement ps = conn.prepareStatement(INSERT_STMT, Statement.RETURN_GENERATED_KEYS);
-        ) {
+    public void save(BlockedIpDTO blockedIpDTO) {
+        PreparedStatement ps = null;
+        try {
+            Connection conn = Database.getConnection();
+            ps = conn.prepareStatement(INSERT_STMT);
             ps.setTimestamp(1, Timestamp.valueOf(blockedIpDTO.getRequestTime()));
             ps.setString(2, blockedIpDTO.getIp());
             ps.setString(3, blockedIpDTO.getReason());
@@ -25,12 +24,10 @@ public class BlockedIpsRepository {
             ps.setInt(6, blockedIpDTO.getThresholdParam());
             ps.executeUpdate();
             conn.commit();
-            ResultSet rs = ps.getGeneratedKeys();
-            return rs.getInt(1);
-
         } catch (SQLException e1) {
             System.err.println(e1.getMessage());
+        } finally {
+            Database.closeQuietly(ps);
         }
-        return -1;
     }
 }
