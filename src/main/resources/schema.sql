@@ -1,6 +1,5 @@
 CREATE TABLE `BLOCKED_IPS` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
-  `request_time` datetime DEFAULT NULL,
   `ip` varchar(15) DEFAULT NULL,
   `reason` varchar(250) DEFAULT NULL,
   `start_date_param` datetime NOT NULL,
