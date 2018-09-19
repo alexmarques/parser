@@ -2,15 +2,14 @@ package com.ef;
 
 import org.apache.commons.cli.*;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +19,15 @@ public class Parser {
     public static final BlockedIpsRepository repository = new BlockedIpsRepository();
     public static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd.HH:mm:ss");
 
-    public static void main(String[] args) throws ParseException, IOException {
+    public static void main(String[] args) throws IOException {
+
+        Option file = Option.builder()
+                .longOpt("accesslog")
+                .desc("log file")
+                .required()
+                .hasArg()
+                .valueSeparator()
+                .build();
 
         Option duration = Option.builder()
                 .longOpt("duration")
@@ -48,6 +55,7 @@ public class Parser {
                 .build();
 
         Options options = new Options();
+        options.addOption(file);
         options.addOption(startDate);
         options.addOption(duration);
         options.addOption(threshold);
@@ -59,6 +67,18 @@ public class Parser {
         try {
             cmd = parser.parse(options, args);
         } catch (ParseException e) {
+            formatter.printHelp("java Parser", "", options, e.getMessage(), true);
+            System.exit(-1);
+        }
+
+        Path path = null;
+
+        try {
+            path = Paths.get(cmd.getOptionValue("accesslog"));
+            if(Files.notExists(path)) {
+                throw new Exception("log file not found");
+            }
+        } catch (Exception e) {
             formatter.printHelp("java Parser", "", options, e.getMessage(), true);
             System.exit(-1);
         }
@@ -101,48 +121,45 @@ public class Parser {
             System.exit(-1);
         }
 
-        InputStream is = Parser.class.getClassLoader().getResourceAsStream("access.log");
-        BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+        List<String> lines = Files.readAllLines(path);
 
-        Map<String, List<BlockedIpDTO>> requests = new HashMap<>();
+        Map<String, BlockedIpDTO> requests = new HashMap<>();
 
-        while(reader.ready()) {
-
-            String line = reader.readLine();
+        for(String line : lines) {
 
             BlockedIpDTO blockedIpDTO = parseLine(line);
+            blockedIpDTO.setStartDateParam(startLocalDateTime);
+            blockedIpDTO.setDurationParam(durationParam);
+            blockedIpDTO.setThresholdParam(Integer.valueOf(thresholdParam));
 
             if(blockedIpDTO.getRequestTime().isEqual(startLocalDateTime) || blockedIpDTO.getRequestTime().isAfter(startLocalDateTime)) {
                 if(blockedIpDTO.getRequestTime().isEqual(endLocalDateTime) || blockedIpDTO.getRequestTime().isBefore(endLocalDateTime)) {
-                    List<BlockedIpDTO> blockedIpList = requests.getOrDefault(blockedIpDTO.getIp(), new ArrayList<>());
-                    blockedIpList.add(blockedIpDTO);
-                    requests.put(blockedIpDTO.getIp(), blockedIpList);
+                    BlockedIpDTO blockedIp = requests.getOrDefault(blockedIpDTO.getIp(), blockedIpDTO);
+                    blockedIp.incrementCount();
+                    requests.put(blockedIpDTO.getIp(), blockedIp);
                 }
             }
         }
 
         LocalDateTime finalEndLocalDateTime = endLocalDateTime;
         requests.forEach((k, v) -> {
-            if(v.size() > Integer.parseInt(thresholdParam)) {
-                v.forEach(blockedIpDTO -> repository.save(blockedIpDTO));
-                String reason = String.format("IP: %s has %s or more requests between %s and %s", k, thresholdParam, startLocalDateTime.toString(), finalEndLocalDateTime.toString());
-                //System.out.println("IP: " + k + " made " + v.toString() + " requests.");
+            if(v.getCount() > Integer.parseInt(thresholdParam)) {
+                String reason = String.format("IP: %s has %s or more requests between %s and %s",
+                        k, thresholdParam, startLocalDateTime.format(Parser.formatter), finalEndLocalDateTime.format(Parser.formatter));
+                v.setReason(reason);
+                repository.save(v);
                 System.out.println(reason);
             }
         });
 
-        reader.close();
-        is.close();
         Database.releaseConnection();
     }
 
     private static BlockedIpDTO parseLine(String line) {
         String split[] = line.split("\\|");
-
         BlockedIpDTO dto = new BlockedIpDTO();
         dto.setRequestTime(parseRequestedTime(split[0]));
         dto.setIp(split[1]);
-
         return dto;
     }
 
@@ -150,9 +167,5 @@ public class Parser {
         String date = requestedTime.replace(" ", ".");
         String substringDate = date.substring(0, date.lastIndexOf("."));
         return LocalDateTime.from(formatter.parse(substringDate));
-    }
-
-    private static String parseHttpMethod(String httpMethod) {
-        return null;
     }
 }

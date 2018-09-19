@@ -7,6 +7,10 @@ import java.sql.Statement;
 
 public class Database {
 
+    private static final String URL = "jdbc:mysql://localhost:3306/parser?autoReconnect=true&relaxAutoCommit=true";
+    private static final String USER = "root";
+    private static final String PASSWORD = "";
+
     private static Connection conn;
 
     private Database() {}
@@ -14,7 +18,7 @@ public class Database {
     public static Connection getConnection() {
         if(conn == null) {
             try {
-                DriverManager.getConnection("jdbc:mysql://localhost:3306/parser", "root", "");
+                conn = DriverManager.getConnection(URL, USER, PASSWORD);
             } catch (SQLException e) {
                 System.err.println(e.getMessage());
             }

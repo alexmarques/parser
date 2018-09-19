@@ -4,7 +4,7 @@ import java.sql.*;
 
 public class BlockedIpsRepository {
 
-    private static final String INSERT_STMT = "INSERT INTO BLOCKED_IPS(request_time, ip, reason, start_date_param, duration, threshold) values(?,?,?,?,?,?)";
+    private static final String INSERT_STMT = "INSERT INTO BLOCKED_IPS(ip, reason, start_date_param, duration, threshold) values(?,?,?,?,?)";
 
     /**
      * Save the blocked ip into the database
@@ -16,12 +16,11 @@ public class BlockedIpsRepository {
         try {
             Connection conn = Database.getConnection();
             ps = conn.prepareStatement(INSERT_STMT);
-            ps.setTimestamp(1, Timestamp.valueOf(blockedIpDTO.getRequestTime()));
-            ps.setString(2, blockedIpDTO.getIp());
-            ps.setString(3, blockedIpDTO.getReason());
-            ps.setTimestamp(4, Timestamp.valueOf(blockedIpDTO.getStartDateParam()));
-            ps.setString(5, blockedIpDTO.getDurationParam());
-            ps.setInt(6, blockedIpDTO.getThresholdParam());
+            ps.setString(1, blockedIpDTO.getIp());
+            ps.setString(2, blockedIpDTO.getReason());
+            ps.setTimestamp(3, Timestamp.valueOf(blockedIpDTO.getStartDateParam()));
+            ps.setString(4, blockedIpDTO.getDurationParam());
+            ps.setInt(5, blockedIpDTO.getThresholdParam());
             ps.executeUpdate();
             conn.commit();
         } catch (SQLException e1) {

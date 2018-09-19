@@ -11,6 +11,7 @@ public class BlockedIpDTO {
     private LocalDateTime startDateParam;
     private String durationParam;
     private int thresholdParam;
+    private int count;
 
     public long getId() {
         return id;
@@ -66,5 +67,13 @@ public class BlockedIpDTO {
 
     public void setThresholdParam(int thresholdParam) {
         this.thresholdParam = thresholdParam;
+    }
+
+    public int getCount() {
+        return count;
+    }
+
+    public void incrementCount() {
+        this.count++;
     }
 }
